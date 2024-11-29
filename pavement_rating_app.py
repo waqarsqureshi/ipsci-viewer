@@ -5,8 +5,9 @@ from PyQt5.QtWidgets import (
     QApplication, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, QWidget,
     QMessageBox
 )
-from PyQt5.QtGui import QPixmap, QImage, QColor, QPalette
+from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
+
 
 class PavementRatingApp(QWidget):
     def __init__(self):
@@ -14,10 +15,6 @@ class PavementRatingApp(QWidget):
         self.initUI()
 
     def initUI(self):
-        """
-        Initialize the User Interface.
-        Sets up the window, layouts, buttons, and other UI components.
-        """
         self.setWindowTitle("Quality Control Viewer for iPSCI Rating")
         self.resize(1000, 600)
 
@@ -88,10 +85,6 @@ class PavementRatingApp(QWidget):
         self.csvFilePath = ""
 
     def loadImages(self):
-        """
-        Load images from a selected folder.
-        Opens a file dialog to select a folder containing images and gathers all valid image files.
-        """
         self.imagesFolder = QFileDialog.getExistingDirectory(self, "Select Image Folder")
         if self.imagesFolder:
             # Gather all image paths
@@ -109,10 +102,6 @@ class PavementRatingApp(QWidget):
                 QMessageBox.warning(self, "Warning", "No images found in the selected folder.")
 
     def loadCSV(self):
-        """
-        Load image ratings from a CSV file.
-        Opens a file dialog to select a CSV file containing image names, ratings, and confidence values.
-        """
         self.csvFilePath = QFileDialog.getOpenFileName(self, "Select CSV File", "", "CSV Files (*.csv)")[0]
         if self.csvFilePath:
             try:
@@ -150,10 +139,6 @@ class PavementRatingApp(QWidget):
                 QMessageBox.warning(self, "Error", f"Could not load CSV file: {e}")
 
     def nextImage(self):
-        """
-        Display the next image in the sequence.
-        Moves to the next image if available, or shows a completion message if at the end.
-        """
         if self.imagePaths:
             if self.currentIndex < len(self.imagePaths) - 1:
                 self.currentIndex += 1
@@ -164,32 +149,54 @@ class PavementRatingApp(QWidget):
             QMessageBox.warning(self, "Warning", "No images loaded to navigate.")
 
     def prevImage(self):
-        """
-        Display the previous image in the sequence.
-        Moves to the previous image if available.
-        """
         if self.currentIndex > 0:
             self.currentIndex -= 1
             self.displayImage()
 
     def rateImage(self, rating):
         """
-        Rate the current image and move to the next one.
-        Updates the rating of the current image and moves to the next image automatically.
-        
-        Parameters:
-        - rating: The rating value assigned by the user (1-10).
+        Rate the current image and move it to a folder based on the updated rating
+        if the rating has been changed. Then move to the next image.
         """
         if self.imagePaths:
-            current_rating, confidence = self.imageRatings[self.currentIndex]
-            self.imageRatings[self.currentIndex] = (rating, confidence)
+            original_rating, confidence = self.imageRatings[self.currentIndex]
+
+            # Update the rating only if it has been changed
+            if rating != original_rating:
+                self.imageRatings[self.currentIndex] = (rating, confidence)
+                self.moveCurrentImage(rating)
+
+            # Move to the next image
             self.nextImage()
 
+    def moveCurrentImage(self, new_rating):
+        """
+        Move the current image to a subfolder corresponding to the new rating if 
+        the rating has been changed.
+        """
+        if self.imagePaths:
+            # Get the current image path
+            current_image_path = self.imagePaths[self.currentIndex]
+            image_name = os.path.basename(current_image_path)
+
+            # Create the destination folder based on the new rating
+            destination_folder = os.path.join(self.imagesFolder, str(new_rating))
+            os.makedirs(destination_folder, exist_ok=True)
+
+            # Create the destination path
+            destination_path = os.path.join(destination_folder, image_name)
+
+            # Only move the image if the destination folder is different from the current folder
+            if current_image_path != destination_path:
+                try:
+                    os.rename(current_image_path, destination_path)
+                    QMessageBox.information(self, "Image Moved", f"Image moved to folder: {destination_folder}")
+                    # Update the path in the list after moving
+                    self.imagePaths[self.currentIndex] = destination_path
+                except Exception as e:
+                    QMessageBox.warning(self, "Error", f"Could not move image: {e}")
+
     def displayImage(self):
-        """
-        Display the current image along with its rating and confidence.
-        Shows the image, sets the size, and updates the rating label with current values.
-        """
         if self.imagePaths:
             image_path = self.imagePaths[self.currentIndex]
             image = QImage(image_path)
@@ -204,16 +211,6 @@ class PavementRatingApp(QWidget):
                 self.imageLabel.setText("Failed to load image.")
 
     def getButtonStyle(self, rating):
-        """
-        Get the style for the rating buttons.
-        Returns a style string based on the rating value (color-coded).
-        
-        Parameters:
-        - rating: The rating value (1-10).
-        
-        Returns:
-        - A stylesheet string with appropriate color for the button.
-        """
         if rating >= 9:
             color = "green"
         elif rating >= 7:
@@ -224,6 +221,7 @@ class PavementRatingApp(QWidget):
             color = "red"
 
         return f"background-color: {color}; border-radius: 25px; font-size: 14px; color: white;"
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
